@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+frib_datasource = "0.1.2"
+rust_ringitem_format = "0.1.2"
+
