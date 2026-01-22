@@ -190,8 +190,10 @@ fn item_to_frame(item : &RingItem) -> Frame {
     let mut result = Frame::new(body_header.timestamp);
 
     // Get the frame description fromt he ring item:
+    // Note that the payload includes the body header contents!
 
     let body = item.payload();    // Vec<u8>
+    let body = &body[4*size_of::<u32>()..];  // Skip over the body header we know we have.
     let longbuf  = &body[0..4];
     result.data_size = u32::from_ne_bytes(longbuf.try_into().unwrap());
 
