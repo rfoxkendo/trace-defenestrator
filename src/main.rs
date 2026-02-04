@@ -5,7 +5,7 @@ use std::io::Write;
 use std::fs::*;
 
 use frib_datasource;
-use frib_datasource::DataSource;
+use frib_datasource::{DataSource, DataSink};
 use rust_ringitem_format::{RingItem, BodyHeader, ToRaw};
 use rust_ringitem_format::event_item::*;   // For PHYSICS_EVENT.
 
@@ -46,7 +46,7 @@ impl Frame {
 }
 //
 // Usage:
-//    trace-defenestrator in-uri outfile
+//    trace-defenestrator in-uri out-uri
 // See fn usage below.
 fn main() {
     let argv : Vec<String> = env::args().collect();
@@ -75,22 +75,13 @@ fn main() {
 
     // Open the output file or stdout.:
 
-    let mut sink : Box<dyn Write> = if outpath == "-" {
-        Box::new(io::stdout())
-    } else {
-        let out = File::create(&outpath);
-        match out {
-            Err(e) => {
-                eprintln!("Could not open the output file {} : {}", outpath, e);
-                usage();
-                exit(-1);
-            },
-            Ok(f) =>  {
-                Box::new(f)
-            }
-        }
-        
+    let sink = frib_datasource::data_sink_factory(&outpath);
+    if let Err(e) = sink {
+        eprintln!("Failed to open the data sink {} : {}", outpath, e);
+        usage();
+        exit(-1);
     };
+    let mut sink = sink.unwrap();
     // Process the inputs to the outputs.
 
     frames_to_traces(&mut src, &mut sink);
@@ -102,15 +93,16 @@ fn usage() {
     eprintln!("Where");
     eprintln!("   in-uri - is a URI for the data source.");
     eprintln!("            tcp://host/ring is supported for live data");
-    eprintln!("   outfile - Is the output file path. Note that");
-    eprintln!("           the special value '-' means stdout which,");
-    eprintln!("          combined with stdintoring supports contributing to a ringbuffer");
+    eprintln!("   out-uri - Is the output file path. Note that");
+    eprintln!("           the special value 'file:///-' means stdout which,");
+    eprintln!("           out-uri functions exactly like in-uri but only localhost ");
+    eprintln!("           can be used as the host.");
 
 }
 // This function has the main logic...accepting ring items with frames from the source
 // and emitting ring items with traces on the sink
 
-fn frames_to_traces(src: &mut  Box<dyn DataSource>, sink : &mut Box<dyn Write>) {
+fn frames_to_traces(src: &mut  Box<dyn DataSource>, sink : &mut Box<dyn DataSink>) {
     let mut trace : Option<Trace> = None;             // Some if we are assembling.
  
     while let Some(item) = src.read() {
@@ -218,7 +210,7 @@ fn item_to_frame(item : &RingItem) -> Frame {
 
 // Write a trace as a PHYSICS_EVENT ring item to a sink.
 
-fn write_trace(sink : &mut Box<dyn Write>, trace : &Trace) {
+fn write_trace(sink : &mut Box<dyn DataSink>, trace : &Trace) {
     let body_header = BodyHeader {
         timestamp: trace.timestamp,
         source_id: 0,                               // For now.
@@ -235,5 +227,7 @@ fn write_trace(sink : &mut Box<dyn Write>, trace : &Trace) {
 
     // Write it out... for now panic on failure.
 
-    event.to_raw().write_item(sink).expect("Unable to write a ring item to the sink");
+    let item = event.to_raw();
+    sink.write(&item).expect("Unable to write item to data sink");
+    
 }
