@@ -229,5 +229,9 @@ fn write_trace(sink : &mut Box<dyn DataSink>, trace : &Trace) {
 
     let item = event.to_raw();
     sink.write(&item).expect("Unable to write item to data sink");
+
+    // for now flush every time:
+
+    sink.flush();
     
 }
